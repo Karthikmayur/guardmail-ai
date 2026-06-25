@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GuardMail AI — Phishing Detector</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .header h1 {
+      font-size: 26px;
+      font-weight: 600;
+      color: #1a1a2e;
+      letter-spacing: -0.5px;
+    }
+    .header p {
+      font-size: 14px;
+      color: #666;
+      margin-top: 6px;
+    }
+    .badge-local {
+      display: inline-block;
+      background: #e8f5e9;
+      color: #2e7d32;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-top: 8px;
+      letter-spacing: 0.3px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 700px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+
+    .demo-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .demo-btn {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 500;
+      color: #444;
+      transition: all 0.15s;
+    }
+    .demo-btn:hover { background: #f5f5f5; border-color: #bbb; }
+    .demo-btn.safe    { border-color: #4caf50; color: #2e7d32; }
+    .demo-btn.phish   { border-color: #f44336; color: #c62828; }
+    .demo-btn.spear   { border-color: #ff9800; color: #e65100; }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      color: #333;
+      line-height: 1.6;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: #1565c0; }
+
+    .btn-analyze {
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      background: #1565c0;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.2px;
+    }
+    .btn-analyze:hover   { background: #0d47a1; }
+    .btn-analyze:active  { transform: scale(0.99); }
+    .btn-analyze:disabled { background: #90caf9; cursor: not-allowed; }
+
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 24px;
+      color: #666;
+      font-size: 14px;
+    }
+    .spinner.show { display: block; }
+
+    .result { display: none; }
+    .result.show { display: block; }
+
+    .verdict-banner {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .verdict-banner.safe     { background: #e8f5e9; border: 1.5px solid #4caf50; }
+    .verdict-banner.phishing { background: #ffebee; border: 1.5px solid #f44336; }
+    .verdict-banner.suspicious { background: #fff8e1; border: 1.5px solid #ff9800; }
+
+    .verdict-icon { font-size: 32px; flex-shrink: 0; }
+    .verdict-text h2 { font-size: 18px; font-weight: 700; margin-bottom: 3px; }
+    .verdict-text p  { font-size: 13px; opacity: 0.75; }
+
+    .safe     .verdict-text h2 { color: #1b5e20; }
+    .phishing .verdict-text h2 { color: #b71c1c; }
+    .suspicious .verdict-text h2 { color: #e65100; }
+
+    .score-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .score-label { font-size: 13px; color: #666; min-width: 80px; }
+    .score-bar-wrap {
+      flex: 1;
+      height: 10px;
+      background: #eee;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .score-bar {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.8s ease;
+    }
+    .score-num { font-size: 15px; font-weight: 700; min-width: 50px; text-align: right; }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .reasons-list { list-style: none; margin-bottom: 20px; }
+    .reasons-list li {
+      display: flex;
+      gap: 10px;
+      font-size: 13px;
+      color: #333;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      line-height: 1.5;
+    }
+    .reasons-list li:last-child { border-bottom: none; }
+    .reason-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+
+    .info-box {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .info-box strong { color: #222; font-weight: 600; }
+
+    .action-box {
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .action-box.safe       { background: #e8f5e9; color: #1b5e20; }
+    .action-box.phishing   { background: #ffebee; color: #b71c1c; }
+    .action-box.suspicious { background: #fff8e1; color: #e65100; }
+
+    .summary-box {
+      background: #e3f2fd;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #0d47a1;
+      line-height: 1.7;
+    }
+
+    .btn-reset {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1.5px solid #ddd;
+      border-radius: 10px;
+      font-size: 14px;
+      color: #555;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: all 0.15s;
+    }
+    .btn-reset:hover { background: #f5f5f5; }
+
+    .error-box {
+      background: #ffebee;
+      border: 1.5px solid #f44336;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #c62828;
+      display: none;
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+    .error-box.show { display: block; }
+
+    .footer {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🛡️ GuardMail AI</h1>
+  <p>AI-powered phishing email detector</p>
+  <span class="badge-local">● Running locally on your laptop</span>
+</div>
+
+<div class="card">
+  <p style="font-size:13px;color:#666;margin-bottom:10px;font-weight:500">Quick demo emails:</p>
+  <div class="demo-buttons">
+    <button class="demo-btn safe"  onclick="loadDemo('safe')">✓ Safe email</button>
+    <button class="demo-btn phish" onclick="loadDemo('phish')">✗ Obvious phishing</button>
+    <button class="demo-btn spear" onclick="loadDemo('spear')">⚠ CEO spear-phish</button>
+  </div>
+
+  <textarea id="emailInput" placeholder="Paste any suspicious email here — subject, sender, and body..."></textarea>
+
+  <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">
+    Analyze Email with AI
+  </button>
+  <div class="error-box" id="errorBox"></div>
+</div>
+
+<div class="spinner" id="spinner">
+  🔍 Analyzing with AI... please wait
+</div>
+
+<div class="card result" id="resultCard">
+
+  <div class="verdict-banner" id="verdictBanner">
+    <div class="verdict-icon" id="verdictIcon"></div>
+    <div class="verdict-text">
+      <h2 id="verdictText"></h2>
+      <p id="threatLevel"></p>
+    </div>
+  </div>
+
+  <div class="score-row">
+    <span class="score-label">Risk Score</span>
+    <div class="score-bar-wrap">
+      <div class="score-bar" id="scoreBar" style="width:0%"></div>
+    </div>
+    <span class="score-num" id="scoreNum"></span>
+  </div>
+
+  <p class="section-title">Why this verdict</p>
+  <ul class="reasons-list" id="reasonsList"></ul>
+
+  <p class="section-title">What the attacker wants</p>
+  <div class="info-box" id="attackerGoal"></div>
+
+  <p class="section-title">Recommended action</p>
+  <div class="action-box" id="actionBox"></div>
+
+  <p class="section-title">Plain English summary</p>
+  <div class="summary-box" id="summaryBox"></div>
+
+  <button class="btn-reset" onclick="reset()">← Analyze another email</button>
+</div>
+
+<p class="footer">GuardMail AI · Local server · http://localhost:5000</p>
+
+<script>
+  const demos = {
+    safe: `From: hr@yourcompany.com
+To: karthik@yourcompany.com
+Subject: Updated Leave Policy — FY2025
+
+Hi Karthik,
+
+Please find attached the updated leave policy document for FY2025.
+Key changes include an increase in casual leave from 10 to 12 days.
+
+Please review and acknowledge by Friday.
+
+Best regards,
+Priya Menon
+HR Manager, YourCompany`,
+
+    phish: `From: security-alert@paypa1-support.com
+To: karthik@yourcompany.com
+Subject: URGENT: Your account has been suspended!
+
+Dear Customer,
+
+We have detected suspicious activity on your PayPal account.
+Your account has been TEMPORARILY SUSPENDED.
+
+You must verify your identity within 24 hours or your account will be permanently closed.
+
+Click here to verify now: http://paypa1-secure-login.xyz/verify
+
+PayPal Security Team`,
+
+    spear: `From: rajesh.kumar.ceo@yourcompany-mail.co
+To: karthik@yourcompany.com
+Subject: Quick wire transfer needed — confidential
+
+Karthik,
+
+I'm in an important board meeting and cannot take calls.
+I need you to urgently process a wire transfer of $47,500 to a new vendor.
+
+This is time-sensitive and confidential — do not discuss with anyone else.
+I'll explain everything after the meeting.
+
+Please confirm you can handle this immediately.
+
+Rajesh Kumar
+CEO, YourCompany`
+  };
+
+  function loadDemo(type) {
+    document.getElementById("emailInput").value = demos[type];
+    document.getElementById("errorBox").classList.remove("show");
+  }
+
+  async function analyze() {
+    const email = document.getElementById("emailInput").value.trim();
+    if (!email) {
+      showError("Please paste an email or click one of the demo buttons above.");
+      return;
+    }
+
+    document.getElementById("analyzeBtn").disabled = true;
+    document.getElementById("spinner").classList.add("show");
+    document.getElementById("resultCard").classList.remove("show");
+    document.getElementById("errorBox").classList.remove("show");
+
+    try {
+      const res = await fetch("/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        showError("Error: " + data.error);
+        return;
+      }
+
+      showResult(data);
+
+    } catch (err) {
+      showError("Could not connect to local server. Make sure app.py is running.");
+    } finally {
+      document.getElementById("analyzeBtn").disabled = false;
+      document.getElementById("spinner").classList.remove("show");
+    }
+  }
+
+  function showResult(d) {
+    const verdict = (d.verdict || "").toUpperCase();
+    const score = parseInt(d.risk_score) || 0;
+
+    const isPhishing   = verdict.includes("PHISHING");
+    const isSuspicious = verdict.includes("SUSPICIOUS");
+    const isSafe       = !isPhishing && !isSuspicious;
+
+    const banner = document.getElementById("verdictBanner");
+    banner.className = "verdict-banner " + (isPhishing ? "phishing" : isSuspicious ? "suspicious" : "safe");
+
+    document.getElementById("verdictIcon").textContent = isPhishing ? "🚨" : isSuspicious ? "⚠️" : "✅";
+    document.getElementById("verdictText").textContent = d.verdict;
+    document.getElementById("threatLevel").textContent = "Threat level: " + (d.threat_level || "Unknown");
+
+    const bar = document.getElementById("scoreBar");
+    const barColor = score >= 70 ? "#f44336" : score >= 40 ? "#ff9800" : "#4caf50";
+    bar.style.background = barColor;
+    setTimeout(() => bar.style.width = score + "%", 50);
+    document.getElementById("scoreNum").textContent = score + "/100";
+    document.getElementById("scoreNum").style.color = barColor;
+
+    const ul = document.getElementById("reasonsList");
+    ul.innerHTML = "";
+    (d.reasons || []).filter(r => r).forEach(r => {
+      const li = document.createElement("li");
+      const dotColor = isPhishing ? "#f44336" : isSuspicious ? "#ff9800" : "#4caf50";
+      li.innerHTML = `<span class="reason-dot" style="background:${dotColor}"></span><span>${r}</span>`;
+      ul.appendChild(li);
+    });
+
+    document.getElementById("attackerGoal").innerHTML = "<strong>Goal:</strong> " + (d.attacker_goal || "N/A");
+
+    const actionBox = document.getElementById("actionBox");
+    actionBox.className = "action-box " + (isPhishing ? "phishing" : isSuspicious ? "suspicious" : "safe");
+    actionBox.textContent = d.action || "";
+
+    document.getElementById("summaryBox").textContent = d.summary || "";
+
+    document.getElementById("resultCard").classList.add("show");
+    document.getElementById("resultCard").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function showError(msg) {
+    const box = document.getElementById("errorBox");
+    box.textContent = msg;
+    box.classList.add("show");
+    document.getElementById("spinner").classList.remove("show");
+    document.getElementById("analyzeBtn").disabled = false;
+  }
+
+  function reset() {
+    document.getElementById("resultCard").classList.remove("show");
+    document.getElementById("emailInput").value = "";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+</script>
+</body>
+</html>
